@@ -50,6 +50,47 @@ async def get_all_products():
     return products
 
 
+@router.get("/stats")
+async def get_product_stats():
+    pipeline = [
+        {
+            "$group": {
+                "_id": "$category",
+                "count": {"$sum": 1},
+                "totalPrice": {"$sum": "$price"},
+                "minPrice": {"$min": "$price"},
+                "maxPrice": {"$max": "$price"},
+            }
+        }
+    ]
+
+    category_docs = await products_collection.aggregate(pipeline).to_list(None)
+
+    if not category_docs:
+        return {
+            "totalCount": 0,
+            "averagePrice": None,
+            "minPrice": None,
+            "maxPrice": None,
+            "categoryCount": {},
+        }
+
+    total_count = sum(d["count"] for d in category_docs)
+    total_price_sum = sum(d["totalPrice"] for d in category_docs)
+    min_price = min(d["minPrice"] for d in category_docs)
+    max_price = max(d["maxPrice"] for d in category_docs)
+    average_price = round(total_price_sum / total_count, 2) if total_count else None
+    category_count = {d["_id"]: d["count"] for d in category_docs if d["_id"] is not None}
+
+    return {
+        "totalCount": total_count,
+        "averagePrice": average_price,
+        "minPrice": min_price,
+        "maxPrice": max_price,
+        "categoryCount": category_count,
+    }
+
+
 @router.get("/search")
 async def search_products(
     q: Optional[str] = Query(None),
